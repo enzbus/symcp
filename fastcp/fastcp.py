@@ -40,6 +40,8 @@ class SymbolicArray(object):
         return Neg(self)
 
     def __eq__(self, other):
+        if self is other: # to make __hash__ work
+            return True
         return EqualityConstraint(self, other)
 
     def __ge__(self, other):
@@ -47,6 +49,20 @@ class SymbolicArray(object):
 
     def __le__(self, other):
         return InequalityConstraint(self, other)
+
+    # for numpy
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        if method == '__call__':
+            arr = inputs[0]
+            assert isinstance(arr, np.ndarray)
+            if ufunc is np.matmul:
+                return self.T @ arr
+            if ufunc is np.multiply:
+                return self * arr
+            if ufunc is np.add:
+                return self + arr
+            if ufunc is np.subtract:
+                return -self + arr
 
     @property
     def T(self):
@@ -66,11 +82,37 @@ class SymbolicArray(object):
                 if isinstance(attr, SymbolicArray)])
         return result + ')'
 
-    def minimize(self, constraints=()):
-        """Minimize self subject to constraints."""
+    def minimize(self, subject_to=()):
+        """Minimize self subject to constraints.
+        
+        :returns: Program.
+        :rtype: cp.Program
+        """
         if len(self.shape) > 0:
             raise ValueError(
                 f'Only scalars can be minimized, not shape {self.shape}')
+
+    def _expression_recursive(self, **kwargs):
+
+        for _, child in self.__dict__.items():
+            if hasattr(child, "_expression_recursive"):
+                child._expression_recursive(**kwargs)
+        if hasattr(self, "_expression"):
+            # pylint: disable=assignment-from-no-return
+            self._current_expression = self._expression(**kwargs)
+            return self.current_expression
+        return None
+
+    _current_expression = None
+
+    def _expression(self, **kwargs):
+
+        raise NotImplementedError
+
+    @property
+    def current_expression(self):
+        """Current matrix expression."""
+        return self._current_expression
 
 
 class Variable(SymbolicArray):
@@ -95,14 +137,36 @@ class Variable(SymbolicArray):
     def value(self, value):
         self._value[:] = value
 
+    def __hash__(self):
+        return id(self)
+
+    def _expression(self, **kwargs):
+        return {self: 1.},
+
     # def epigraph(self):
     #     """Epigraph transformation."""
     #     return Program(objective=self)
 
+    def compile(self):
+        return AffineExpression(linear={self:1.})
+
+class EpigraphVariable(Variable):
+    """Epigraph variable."""
+
 class Parameter(Variable):
     """Symbolic parameter."""
 
-class Constant(Variable):
+    # for numpy
+    def __array__(self):
+        return self.value
+
+    def _expression(self, **kwargs):
+        return {}, self.value
+
+    def compile(self):
+        return AffineExpression(constant=self.value)
+
+class Constant(Parameter):
     """Constant scalar or array."""
 
     def __init__(self, value):
@@ -115,9 +179,6 @@ class Constant(Variable):
         #    raise ValueError(
         #        "Only numpy-compatible arrays or scalars can be constants.")
         # self._value = value
-
-
-
 
 
 # class Expression(SymbolicArray):
@@ -166,6 +227,20 @@ class Sum(Combination):
         """Value of the symbolic array."""
         return self.left.value + self.right.value
 
+    def _expression(self, **kwargs):
+
+        le_va, le_co = self.left.current_expression
+        re_va, re_co = self.right.current_expression
+        constant = le_co + re_co
+        variables_expr = {
+            var: (le_va[var] if var in le_va else 0.)
+                + (re_va[var] if var in re_va else 0.)
+                for var in set(le_va).union(set(re_va))}
+
+        return variables_expr, constant
+
+    def compile(self):
+        return self.left.compile() + self.right.compile()
     # def epigraph(self):
     #     """Epigraph transformation."""
     #     lepi = self.left.epigraph()
@@ -179,6 +254,9 @@ class Sub(Combination):
     def value(self):
         """Value of the symbolic array."""
         return self.left.value - self.right.value
+
+    def compile(self):
+        return Sum(self.left, -self.right).compile()
 
 class Mul(Combination):
     """Multiplication with Numpy broadcasting of two symbolic arrays."""
@@ -217,6 +295,19 @@ class Abs(Transformation):
         """Value of the symbolic array."""
         return abs(self.array.value)
 
+    @property
+    def shape(self):
+        return self.array.shape
+
+    def compile(self):
+        epigraph = EpigraphVariable(self.shape)
+        return Program(
+            linear= {epigraph:1.},
+            constraints = ((self.array <= epigraph).compile(), (-self.array <= epigraph).compile()))
+
+    def __le__(self, other):
+        return Constraints(constraints=(self.array <= other, -self.array <= other))
+
 class Neg(Transformation):
     """Negative of a symbolic array."""
 
@@ -224,6 +315,11 @@ class Neg(Transformation):
     def value(self):
         """Value of the symbolic array."""
         return -self.array.value
+
+    def compile(self):
+        _ = self.array.compile()
+        return AffineExpression(
+            linear={k:-v for k,v in _.linear.items()}, constant=-_.constant)
 
 class Transpose(Transformation):
     """Transpose with Numpy rules of symbolic array.
@@ -242,6 +338,22 @@ class Transpose(Transformation):
 class Constraint(Combination):
     """Constraint."""
 
+class Constraints(Constraint):
+
+    def __init__(self, constraints):
+        self.constraints = constraints
+
+    def __repr__(self):
+        return ', '.join(str(c) for c in self.constraints)
+
+    @property
+    def value(self):
+        """Is the constraint satisfied."""
+        return all(c.value for c in self.constraints)
+
+    def compile(self):
+        return tuple(c.compile() for c in self.constraints)
+
 class EqualityConstraint(Constraint):
     """Equality constraint."""
 
@@ -252,6 +364,10 @@ class EqualityConstraint(Constraint):
 
     def __repr__(self):
         return str(self.left) + ' == ' + str(self.right)
+
+    def compile(self):
+        aff_expr = (self.left - self.right).compile()
+        return LinearEqualityConstraint(linear=aff_expr.linear, constant=aff_expr.constant)
 
 class InequalityConstraint(Constraint):
     """Inequality constraint."""
@@ -264,23 +380,85 @@ class InequalityConstraint(Constraint):
     def __repr__(self):
         return str(self.left) + ' <= ' + str(self.right)
 
-class Program:
-    """Convex program."""
-    
-    def __init__(self, objective = 0., constraints = ()):
-        self.objective = objective
-        self.constraints = constraints
-    
-    # def __add__(self, other):
-    #     return Program(
-    #         objective = self.objective + other.objective,
-    #         constraints = tuple(
-    #             list(self.constraints) + list(other.constraints)))
+    def compile(self):
+        aff_expr = (self.left - self.right).compile()
+        return LinearInequalityConstraint(linear=aff_expr.linear, constant=aff_expr.constant)
+
+
+class AffineExpression:
+    """Affine expression."""
+
+    def __init__(
+        self, linear = {}, constant = 0., ):
+        self.linear = linear
+        self.constant = constant
+
+    @staticmethod
+    def _add_dicts(d1, d2):
+        return {
+            k: (d1[k] if k in d1 else 0.) + (d2[k] if k in d2 else 0.)
+            for k in set(d1).union(set(d2))}
+
+    def __add__(self, other):
+        if isinstance(other, AffineQuadraticExpression):
+            return NotImplemented
+        return AffineExpression(
+            linear = self._add_dicts(self.linear, other.linear),
+            constant = self.constant + other.constant)
+
+    def __radd__(self, other):
+        return self.__add__(other)
 
     def __repr__(self):
         return (
-            f'Program(objective={self.objective},'
-            f' constraints={self.constraints})')
+            f'{self.__class__.__name__}('
+            + ', '.join([f'{k}={v}'for k, v in self.__dict__.items()])
+            +")")
+
+class AffineQuadraticExpression(AffineExpression):
+    """Affine and quadratic expression."""
+
+    def __init__(
+        self, quadratic = {}, linear = {}, constant = 0., ):
+        self.quadratic = quadratic
+        super().__init__(linear=linear, constant=constant)
+
+    def __add__(self, other):
+        if isinstance(other, Program):
+            return NotImplemented
+        return AffineQuadraticExpression(
+            quadratic = self._add_dicts(self.quadratic, other.quadratic) if hasattr(other, 'quadratic') else self.quadratic,
+            linear = self._add_dicts(self.linear, other.linear),
+            constant = self.constant + other.constant)
+    
+
+class Program(AffineQuadraticExpression):
+    """Convex program."""
+    
+    def __init__(
+        self, quadratic = {}, linear = {}, constant = 0., constraints = ()):
+        super().__init__(quadratic=quadratic, linear=linear, constant=constant)
+        self.constraints = constraints
+
+    def __add__(self, other):
+        return Program(
+            quadratic = self._add_dicts(self.quadratic, other.quadratic) if hasattr(other, 'quadratic') else self.quadratic,
+            linear = self._add_dicts(self.linear, other.linear),
+            constant = self.constant + other.constant,
+            constraints = tuple(
+                list(self.constraints) + list(other.constraints)) if hasattr(other, 'constraints') else self.constraints )
+
+
+class CompiledConstraint:
+    """Compiled constraint."""
+
+class LinearEqualityConstraint(AffineExpression):
+    """Linear equality constraint"""
+
+class LinearInequalityConstraint(AffineExpression):
+    """Linear inequality constraint"""
+
+
 
 def minimize(objective=0., constraints=()):
     """Minimize objective subject to constraints."""
@@ -288,11 +466,22 @@ def minimize(objective=0., constraints=()):
         objective = Constant(objective)
     return objective.minimize(constraints=constraints)
 
-            
+# from dataclasses import dataclass
+
+# @dataclass
+# class Program:
+#     quadratic: dict = {}
+#     linear: dict = {}
+#     constant: np.array = 0.
+#     constraints: list = []
+
 if __name__ == '__main__':
 
     x = Variable(3)
 
     c = Parameter(3)
+
+    A = np.zeros((3,3))
+    A @ x
 
     # x.T @ c
