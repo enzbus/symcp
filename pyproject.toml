@@ -1,0 +1,55 @@
+[project]
+name = "fastcp"
+version = "0.0.1"
+description = "Optimization language."
+readme = "README.rst"
+license = {text = "Apache License (2.0)"}
+authors = [{name = "Enzo Busseti"}]
+maintainers = [{name = "Enzo Busseti", email = "enzo.busseti@gmail.com"}]
+dependencies = ["numpy", "scipy"]
+
+[project.optional-dependencies]
+docs = ["sphinx", "furo"]
+dev = ["build", "twine", "coverage", "pylint", "isort", "autopep8",
+    "docformatter", "beautifulsoup4", "bandit"]
+
+[project.urls]
+Homepage = "https://fastcp.readthedocs.io"
+Repository = "https://github.com/enzbus/fastcp"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["fastcp", "fastcp.tests"]
+
+
+[tool.pylint.main]
+fail-under = 10.0
+jobs = 0 # multiprocessing pylint
+max-line-length = 79 # PEP8 default
+load-plugins =["pylint.extensions.docparams", "pylint.extensions.docstyle"]
+
+[tool.pylint.parameter_documentation]
+# we require docstrings of public methods to document everything
+accept-no-param-doc = false
+accept-no-raise-doc = false
+accept-no-return-doc = false
+accept-no-yields-doc = false
+
+[tool.pylint.'MESSAGE CONTROL'] # check updates for the spelling of this
+enable=["useless-suppression"] # flag useless pylint pragmas
+
+[tool.coverage.report]
+fail_under = 100
+
+[tool.autopep8]
+# these have been selected by hand, whitespaces and empty lines
+select = ["W291","W293","W391","E231","E225","E303"]
+
+[tool.docformatter]
+# tweaked to remove whitespaces and other simple fixes 
+wrap-summaries = 0
+wrap-descriptions = 0
+tab-width = 4
