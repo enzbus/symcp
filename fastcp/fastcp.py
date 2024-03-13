@@ -51,18 +51,21 @@ class SymbolicArray(object):
         return InequalityConstraint(self, other)
 
     # for numpy
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == '__call__':
-            arr = inputs[0]
-            assert isinstance(arr, np.ndarray)
-            if ufunc is np.matmul:
-                return self.T @ arr
-            if ufunc is np.multiply:
-                return self * arr
-            if ufunc is np.add:
-                return self + arr
-            if ufunc is np.subtract:
-                return -self + arr
+    # def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    #     if method == '__call__':
+    #         arr = inputs[0]
+    #         assert isinstance(arr, np.ndarray)
+    #         if ufunc is np.matmul:
+    #             return self.T @ arr
+    #         if ufunc is np.multiply:
+    #             return self * arr
+    #         if ufunc is np.add:
+    #             return self + arr
+    #         if ufunc is np.subtract:
+    #             return -self + arr
+
+    __array_priority__ = 1.
+    __pandas_priority__ = 5000.
 
     @property
     def T(self):
@@ -482,6 +485,9 @@ if __name__ == '__main__':
     c = Parameter(3)
 
     A = np.zeros((3,3))
-    A @ x
+    print(A @ x)
+
+    import pandas as pd
+    print(pd.Series(range(3)) * x)
 
     # x.T @ c
