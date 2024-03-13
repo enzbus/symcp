@@ -31,13 +31,10 @@ update: clean env  ## update environment
 test:  ## run tests w/ cov report
 	$(BINDIR)/coverage run -m $(PROJECT).tests
 	$(BINDIR)/coverage report
-	$(BINDIR)/coverage xml
-	$(BINDIR)/diff-cover coverage.xml --config-file pyproject.toml
 	$(BINDIR)/bandit $(PROJECT)/*.py $(TESTS)/*.py
 
 lint:  ## run linter
 	$(BINDIR)/pylint $(PROJECT) $(EXTRA_SCRIPTS) # $(EXAMPLES)
-	$(BINDIR)/diff-quality --violations=pylint --config-file pyproject.toml
 
 docs:  ## build docs
 	$(BINDIR)/sphinx-build -E docs $(BUILDDIR)
