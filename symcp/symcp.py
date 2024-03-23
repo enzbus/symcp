@@ -1,4 +1,4 @@
-"""Fast convex programming."""
+"""Symbolic convex programming."""
 
 import numpy as np
 
@@ -64,7 +64,10 @@ class SymbolicArray(object):
     #         if ufunc is np.subtract:
     #             return -self + arr
 
+    # basic numpy interop
     __array_priority__ = 1.
+
+    # basic pandas interop
     __pandas_priority__ = 5000.
 
     @property

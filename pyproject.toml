@@ -1,7 +1,7 @@
 [project]
-name = "fastcp"
+name = "symcp"
 version = "0.0.1"
-description = "Optimization language."
+description = "Symbolic convex programming.."
 readme = "README.rst"
 license = {text = "Apache License (2.0)"}
 authors = [{name = "Enzo Busseti"}]
@@ -11,18 +11,18 @@ dependencies = ["numpy", "scipy"]
 [project.optional-dependencies]
 docs = ["sphinx", "furo"]
 dev = ["build", "twine", "coverage", "pylint", "isort", "autopep8",
-    "docformatter", "beautifulsoup4", "bandit"]
+    "docformatter", "beautifulsoup4"]
 
 [project.urls]
-Homepage = "https://fastcp.readthedocs.io"
-Repository = "https://github.com/enzbus/fastcp"
+Homepage = "https://symcp.readthedocs.io"
+Repository = "https://github.com/enzbus/symcp"
 
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["fastcp", "fastcp.tests"]
+packages = ["symcp", "symcp.tests"]
 
 
 [tool.pylint.main]

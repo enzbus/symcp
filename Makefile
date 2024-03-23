@@ -3,7 +3,7 @@
 # easier to do it this way for now.
 
 PYTHON        = python
-PROJECT       = fastcp
+PROJECT       = symcp
 TESTS         = $(PROJECT)/tests
 BUILDDIR      = build
 ENVDIR        = env
