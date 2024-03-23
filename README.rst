@@ -18,7 +18,7 @@ as possible, which is the key to unlock fast sequential programming.
 Installation
 ------------
 
-.. code-block::
+.. code::
 
     pip install symcp
 
@@ -27,7 +27,7 @@ Usage
 
 *This is not working (yet).*
 
-.. code-block:: python
+.. code:: python
 
     import symcp
     import numpy as np
