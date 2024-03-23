@@ -1,1 +1,1 @@
-"""Fastcp tests."""
+"""Symcp tests."""

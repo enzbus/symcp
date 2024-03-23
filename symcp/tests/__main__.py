@@ -1,4 +1,4 @@
-"""Fastcp tests runner."""
+"""Symcp tests runner."""
 
 from unittest import main
 
