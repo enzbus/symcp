@@ -2,6 +2,7 @@
 
 import numpy as np
 
+
 class SymbolicArray(object):
     """Base class."""
 
@@ -90,7 +91,7 @@ class SymbolicArray(object):
 
     def minimize(self, subject_to=()):
         """Minimize self subject to constraints.
-        
+
         :returns: Program.
         :rtype: cp.Program
         """
@@ -125,13 +126,17 @@ class Variable(SymbolicArray):
     """Optimization variable."""
     def __init__(self, shape=()):
         if isinstance(shape, int):
-            self._shape = (shape,)
+            shape = (shape,)
         elif hasattr(shape, '__iter__') and np.all(
                 (isinstance(el, int) and el > 0) for el in shape):
-            self._shape = tuple(shape)
+            shape = tuple(shape)
         else:
-            raise SyntaxError(
+            raise ValueError(
                 'Only positive integers, or iterables of, are valid shapes.')
+        # if len(shape) > 1:
+        #     raise ValueError(
+        #         'Only one-dimensional variables are currently supported.')
+        self._shape = shape
         self._value = np.zeros(shape=self.shape)
 
     @property
@@ -154,7 +159,7 @@ class Variable(SymbolicArray):
     #     return Program(objective=self)
 
     def compile(self):
-        return AffineExpression(linear={self:1.})
+        return AffineExpression(linear={self: 1.})
 
 class EpigraphVariable(Variable):
     """Epigraph variable."""
@@ -204,7 +209,7 @@ class Combination(SymbolicArray):
 
     def _broadcast_shapes(self, left, right):
         """Numpy broadcasting of shapes.
-        
+
         See https://numpy.org/doc/stable/user/basics.broadcasting.html .
         """
         lenshape = max(len(left.shape), len(right.shape))
@@ -278,7 +283,7 @@ class MatMul(Combination):
     def _broadcast_shapes(self, left, right):
         # TODO: do this right
         return (left.value @ right.value).shape
-    
+
     @property
     def value(self):
         """Value of the symbolic array."""
@@ -308,7 +313,7 @@ class Abs(Transformation):
     def compile(self):
         epigraph = EpigraphVariable(self.shape)
         return Program(
-            linear= {epigraph:1.},
+            linear= {epigraph: 1.},
             constraints = ((self.array <= epigraph).compile(), (-self.array <= epigraph).compile()))
 
     def __le__(self, other):
@@ -325,11 +330,11 @@ class Neg(Transformation):
     def compile(self):
         _ = self.array.compile()
         return AffineExpression(
-            linear={k:-v for k,v in _.linear.items()}, constant=-_.constant)
+            linear={k: -v for k, v in _.linear.items()}, constant=-_.constant)
 
 class Transpose(Transformation):
     """Transpose with Numpy rules of symbolic array.
-    
+
     See https://numpy.org/doc/stable/reference/generated/numpy.transpose.html .
     """
     def __init__(self, array):
@@ -419,7 +424,7 @@ class AffineExpression:
         return (
             f'{self.__class__.__name__}('
             + ', '.join([f'{k}={v}'for k, v in self.__dict__.items()])
-            +")")
+            + ")")
 
 class AffineQuadraticExpression(AffineExpression):
     """Affine and quadratic expression."""
@@ -436,11 +441,11 @@ class AffineQuadraticExpression(AffineExpression):
             quadratic = self._add_dicts(self.quadratic, other.quadratic) if hasattr(other, 'quadratic') else self.quadratic,
             linear = self._add_dicts(self.linear, other.linear),
             constant = self.constant + other.constant)
-    
+
 
 class Program(AffineQuadraticExpression):
     """Convex program."""
-    
+
     def __init__(
         self, quadratic = {}, linear = {}, constant = 0., constraints = ()):
         super().__init__(quadratic=quadratic, linear=linear, constant=constant)
@@ -459,11 +464,10 @@ class CompiledConstraint:
     """Compiled constraint."""
 
 class LinearEqualityConstraint(AffineExpression):
-    """Linear equality constraint"""
+    """Linear equality constraint."""
 
 class LinearInequalityConstraint(AffineExpression):
-    """Linear inequality constraint"""
-
+    """Linear inequality constraint."""
 
 
 def minimize(objective=0., constraints=()):
@@ -487,7 +491,7 @@ if __name__ == '__main__':
 
     c = Parameter(3)
 
-    A = np.zeros((3,3))
+    A = np.zeros((3, 3))
     print(A @ x)
 
     import pandas as pd

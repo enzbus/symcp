@@ -50,6 +50,3 @@ Usage
     program.solve(solver='OSQP')
 
     print(w.value)
-
-
-
